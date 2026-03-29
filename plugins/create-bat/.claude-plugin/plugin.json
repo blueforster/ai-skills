@@ -1,0 +1,8 @@
+{
+  "name": "create-bat",
+  "description": "Skill for generating correct Windows .bat launcher files from WSL/Linux, enforcing all CRLF, ASCII, label, and .cmd-trap rules.",
+  "author": {
+    "name": "forst",
+    "email": ""
+  }
+}

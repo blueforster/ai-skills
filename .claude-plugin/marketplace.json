@@ -1,0 +1,21 @@
+{
+  "name": "ai-skills",
+  "owner": {
+    "name": "forst"
+  },
+  "metadata": {
+    "description": "A collection of Claude Code skills and plugins.",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "create-bat",
+      "source": "./plugins/create-bat",
+      "description": "Generate correct Windows .bat launcher files from WSL/Linux, enforcing all CRLF, ASCII, label, and .cmd-trap rules.",
+      "version": "1.0.0",
+      "author": {
+        "name": "forst"
+      }
+    }
+  ]
+}
