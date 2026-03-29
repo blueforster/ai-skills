@@ -62,7 +62,7 @@ content = (
 )
 ```
 
-## Step 3 — Apply all 23 rules while writing
+## Step 3 — Apply all 24 rules while writing
 
 Quick checklist — verify each before moving to Step 4:
 
@@ -91,6 +91,7 @@ Quick checklist — verify each before moving to Step 4:
 | 21 | start "" title | `start "" "path"` — empty first arg required; quoted path alone sets window title |
 | 22 | call for .bat | Use `call other.bat` or `call :label` — bare invocation transfers execution permanently |
 | 23 | Directory check | Use `if exist "%DIR%\."` to check directory (not file); plain `if exist "%DIR%"` matches both |
+| 24 | `>nul` not `>/dev/null` | `/dev/null` does not exist on Windows CMD — use `>nul 2>&1`; verify with `assert b'/dev/null' not in data` |
 
 ## Step 4 — Write the file using Python binary mode
 

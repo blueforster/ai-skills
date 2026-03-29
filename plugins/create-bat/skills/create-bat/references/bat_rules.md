@@ -264,8 +264,6 @@ echo  No NVIDIA GPU detected, installing CPU version
 
 ---
 
----
-
 ## 14. Paths with Spaces Must Be Quoted
 
 **Problem:** Any path containing spaces will be split into separate tokens by CMD, causing the command to fail silently or with a confusing error.
@@ -490,6 +488,37 @@ if not exist "%APP_DIR%\." (
 
 ---
 
+## 24. `>nul` not `>/dev/null`
+
+**Problem:** When authoring `.bat` files from WSL or any Unix-like environment, it is easy to accidentally write the Linux null-device redirect `>/dev/null 2>&1`. Windows CMD does not have a `/dev/null` device. It tries to write to the literal path `C:\dev\null` (or whichever drive is current). If `C:\dev\` does not exist, CMD prints:
+
+```
+The system cannot find the path specified.
+```
+
+This error message appears on the terminal, pollutes the output, and can also corrupt `%ERRORLEVEL%` in some CMD versions — causing subsequent `if errorlevel 1` checks to misbehave.
+
+**Rule:** Always use `>nul 2>&1` (Windows CMD null device) in `.bat` files. Never use `>/dev/null`.
+
+```bat
+:: BAD - writes to C:\dev\null which does not exist
+where node >/dev/null 2>&1
+ping -n 6 127.0.0.1 >/dev/null 2>&1
+
+:: GOOD
+where node >nul 2>&1
+ping -n 6 127.0.0.1 >nul 2>&1
+```
+
+**How to catch it:** When verifying the finished file with Python, search for the byte string `/dev/null`:
+
+```python
+data = open('file.bat', 'rb').read()
+assert b'/dev/null' not in data, "Found Linux /dev/null — replace with >nul"
+```
+
+---
+
 ## Checklist Before Saving a .bat File
 
 - [ ] All characters are ASCII only (no Unicode)
@@ -512,3 +541,4 @@ if not exist "%APP_DIR%\." (
 - [ ] `start ""` used before any quoted path/URL
 - [ ] `call` used when invoking other .bat files or subroutines
 - [ ] Directory existence checked with `\."` suffix
+- [ ] No `>/dev/null` anywhere — use `>nul 2>&1` (Windows CMD null device)
