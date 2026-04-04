@@ -7,7 +7,7 @@ A collection of Claude Code skills and plugins.
 In Claude Code, run:
 
 ```
-/plugin marketplace add gh:forst/ai-skills
+/plugin marketplace add gh:blueforster/ai-skills
 ```
 
 ## Available plugins
@@ -15,7 +15,7 @@ In Claude Code, run:
 ### `create-bat`
 
 Generates correct Windows `.bat` launcher files from WSL/Linux.
-Enforces all 23 rules: CRLF endings, ASCII-only, label syntax, `.cmd` traps, quoted paths, `cd /d`, and more.
+Enforces all 24 rules: CRLF endings, ASCII-only, label syntax, `.cmd` traps, quoted paths, `cd /d`, and more.
 
 **Install:**
 ```
@@ -24,7 +24,7 @@ Enforces all 23 rules: CRLF endings, ASCII-only, label syntax, `.cmd` traps, quo
 
 **Use:**
 ```
-/create-bat:create-bat
+/create-bat
 ```
 
 ## Adding more skills
