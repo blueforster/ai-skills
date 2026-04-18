@@ -35,6 +35,184 @@ Understand what the bat must do:
 
 Answer these before writing code. Ask the user if anything is unclear.
 
+## Step 1A — Auto-detect project type and create install.bat + start.bat
+
+**Trigger:** Whenever create-bat is invoked from a project directory (i.e. the current working directory contains a recognisable project manifest), always create BOTH `install.bat` and `start.bat` in addition to any other bat file the user requested. Do not ask — just do it.
+
+### 1. Detect project type
+
+Check the current working directory for these files (in priority order):
+
+| File present | Project type | Installer | Start command |
+|---|---|---|---|
+| `package.json` | Node.js / JS | `npm install` | inspect `scripts` field for `dev`, `start`, `serve`, `preview` (prefer `dev`) |
+| `requirements.txt` or `pyproject.toml` or `setup.py` | Python | `pip install -r requirements.txt` or `pip install -e .` | look for `main.py`, `app.py`, `run.py`, `manage.py`, `uvicorn`, `flask`, `fastapi`, `streamlit` |
+| `Cargo.toml` | Rust | `cargo build --release` | `cargo run` |
+| `go.mod` | Go | `go mod download` | `go run .` |
+| `pom.xml` | Java/Maven | `mvn install -DskipTests` | `mvn spring-boot:run` or `java -jar target/*.jar` |
+| `build.gradle` or `build.gradle.kts` | Java/Gradle | `gradlew build` | `gradlew bootRun` or `java -jar build/libs/*.jar` |
+| `Gemfile` | Ruby | `bundle install` | `bundle exec rails server` or `bundle exec ruby app.rb` |
+| `composer.json` | PHP | `composer install` | `php -S localhost:8000` or `php artisan serve` |
+
+If multiple manifests exist, list each type found and generate combined install/start logic.
+
+### 2. Inspect package.json for Node.js projects
+
+Read `package.json` to determine:
+- Which start script to use (check `scripts.dev` → `scripts.start` → `scripts.serve` → `scripts.preview`, in that order)
+- Which port the app uses (scan script values for `--port`, `-p`, `:3000`, `:5173`, `:8080`, etc.)
+- Whether to open a browser after starting (open only if a port is found)
+
+### 3. Inspect requirements.txt / pyproject.toml for Python projects
+
+Scan dependencies to determine framework:
+- `flask` → `flask run` or `python app.py`
+- `fastapi` or `uvicorn` → `uvicorn main:app --reload` or `uvicorn app:app --reload`
+- `streamlit` → `streamlit run app.py` (or whatever the main `.py` is)
+- `django` → `python manage.py runserver`
+- Otherwise → `python main.py` (or `python app.py`, whichever exists)
+
+### 4. Windows path for the project directory
+
+Convert the current WSL path to a Windows path using Python:
+
+```python
+import subprocess, os
+cwd = os.getcwd()
+win_path = subprocess.check_output(['wslpath', '-w', cwd]).decode().strip()
+# e.g. cwd = /mnt/c/Users/forst/myapp  ->  win_path = C:\Users\forst\myapp
+```
+
+Use `win_path` as `APP_DIR` in both bat files.
+
+### 5. install.bat — template
+
+```python
+content = (
+    "@echo off\r\n"
+    "setlocal EnableDelayedExpansion\r\n"
+    "if \"%~1\"==\"\" (\r\n"
+    "    cmd /k \"\"%~f0\" run\"\r\n"
+    "    exit /b\r\n"
+    ")\r\n"
+    "\r\n"
+    "set \"APP_DIR=<WIN_PATH>\"\r\n"
+    "\r\n"
+    "echo ========================================\r\n"
+    "echo  Installing dependencies\r\n"
+    "echo ========================================\r\n"
+    "echo(\r\n"
+    "\r\n"
+    # --- tool existence check (e.g. node, python) ---
+    "where <tool> >nul 2>&1\r\n"
+    "if errorlevel 1 (\r\n"
+    "    set \"ABORT=1\"\r\n"
+    "    echo  [FAIL] <Tool> not found. Install it first.\r\n"
+    ")\r\n"
+    "if \"!ABORT!\"==\"1\" goto :end\r\n"
+    "\r\n"
+    # --- install command (wrapped in cmd /c for npm; python -m pip for pip) ---
+    "echo  Installing packages\r\n"
+    "start /wait \"\" /D \"%APP_DIR%\" cmd /c \"<install command>\"\r\n"
+    "if errorlevel 1 (\r\n"
+    "    set \"INSTALL_FAILED=1\"\r\n"
+    "    echo  [FAIL] Install failed.\r\n"
+    ")\r\n"
+    "if \"!INSTALL_FAILED!\"==\"1\" goto :end\r\n"
+    "\r\n"
+    "echo(\r\n"
+    "echo  Done. Dependencies installed.\r\n"
+    "goto :done\r\n"
+    "\r\n"
+    ":end\r\n"
+    "echo(\r\n"
+    "echo  Install failed. Check errors above.\r\n"
+    "echo(\r\n"
+    "pause >nul\r\n"
+    "\r\n"
+    ":done\r\n"
+)
+```
+
+### 6. start.bat — template
+
+```python
+content = (
+    "@echo off\r\n"
+    "setlocal EnableDelayedExpansion\r\n"
+    "if \"%~1\"==\"\" (\r\n"
+    "    cmd /k \"\"%~f0\" run\"\r\n"
+    "    exit /b\r\n"
+    ")\r\n"
+    "\r\n"
+    "set \"APP_DIR=<WIN_PATH>\"\r\n"
+    "\r\n"
+    "echo ========================================\r\n"
+    "echo  Starting <Project Name>\r\n"
+    "echo ========================================\r\n"
+    "echo(\r\n"
+    "\r\n"
+    # --- optional: check dependencies are installed ---
+    # e.g. for Node: if not exist "%APP_DIR%\node_modules\." -> prompt to run install.bat
+    "if not exist \"%APP_DIR%\\<deps_marker>\" (\r\n"
+    "    set \"ABORT=1\"\r\n"
+    "    echo  [WARN] Dependencies not installed. Run install.bat first.\r\n"
+    ")\r\n"
+    "if \"!ABORT!\"==\"1\" goto :end\r\n"
+    "\r\n"
+    # --- start server in new window ---
+    "echo  Starting server\r\n"
+    "start \"<Project Name>\" /D \"%APP_DIR%\" cmd /k \"<start command>\"\r\n"
+    "\r\n"
+    # --- optional browser open after delay (only if port known) ---
+    "ping -n 4 127.0.0.1 >nul 2>&1\r\n"
+    "start \"\" \"http://localhost:<PORT>\"\r\n"
+    "\r\n"
+    "echo  Server started. Browser opening\r\n"
+    "goto :done\r\n"
+    "\r\n"
+    ":end\r\n"
+    "echo(\r\n"
+    "echo  Could not start. Check errors above.\r\n"
+    "echo(\r\n"
+    "pause >nul\r\n"
+    "\r\n"
+    ":done\r\n"
+)
+```
+
+**Key rules for these templates:**
+- `node_modules\.` for Node dependency check (Rule 23 — directory check)
+- `start /wait "" /D "%APP_DIR%" cmd /c "npm install"` for install (Rule 4 — .cmd trap)
+- `python -m pip install -r requirements.txt` for Python (Rule 4 — pip.cmd trap)
+- `start "Title" /D "%APP_DIR%" cmd /k "<cmd>"` for server (stays open)
+- Browser: `start "" "http://localhost:<PORT>"` only when port is known (Rule 21 — empty title)
+- Omit browser open for non-web projects (CLI tools, Rust binaries, etc.)
+
+### 7. Write both files in the project directory
+
+```python
+import subprocess, os
+
+cwd = os.getcwd()
+win_path = subprocess.check_output(['wslpath', '-w', cwd]).decode().strip()
+
+# Write install.bat
+install_path = os.path.join(cwd, 'install.bat')
+with open(install_path, 'wb') as f:
+    f.write(install_content.encode('ascii'))
+
+# Write start.bat
+start_path = os.path.join(cwd, 'start.bat')
+with open(start_path, 'wb') as f:
+    f.write(start_content.encode('ascii'))
+
+print(f"install.bat -> {install_path}")
+print(f"start.bat   -> {start_path}")
+```
+
+Verify both files with the Step 5 assertions (CRLF, no lone LF, no non-ASCII, no `/dev/null`).
+
 ## Step 2 — Write the bat content as a Python string
 
 Never write the bat file as a text file from WSL — that produces LF endings which silently break `goto`.
@@ -62,7 +240,7 @@ content = (
 )
 ```
 
-## Step 3 — Apply all 24 rules while writing
+## Step 3 — Apply all 24 rules while writing (applies to install.bat and start.bat too)
 
 Quick checklist — verify each before moving to Step 4:
 
@@ -193,6 +371,9 @@ pause >nul
 ## Output
 
 When done, tell the user:
-1. The full path of the `.bat` file created
-2. The verification results (CRLF count, lone LF = 0, non-ASCII = [])
-3. How to use it (double-click, or what it does step by step)
+1. The full paths of every `.bat` file created (the originally-requested file plus `install.bat` and `start.bat` when auto-generated)
+2. The verification results for each file (CRLF count, lone LF = 0, non-ASCII = [])
+3. How to use each file:
+   - `install.bat` — double-click (or run from CMD) to install all dependencies
+   - `start.bat` — double-click (or run from CMD) to start the app; opens the browser automatically if a port was detected
+   - Any other bat file — its specific purpose
